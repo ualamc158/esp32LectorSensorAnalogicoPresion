@@ -3,7 +3,7 @@
   "idf.openOcdConfigs": [
     "board/esp32s3-builtin.cfg"
   ],
-  "idf.portWin": "COM14",
+  "idf.portWin": "COM15",
   "idf.currentSetup": "C:\\esp\\v5.3.4\\esp-idf",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
