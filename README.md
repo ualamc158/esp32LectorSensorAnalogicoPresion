@@ -1,35 +1,39 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C6 | ESP32-H2 | ESP32-P4 | ESP32-S2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | -------- | -------- | -------- |
+# Lector de Sensor de Presión (ESP32-S3 Esclavo)
 
-# _Sample project_
+Este repositorio contiene el código para un **ESP32-S3** encargado de la lectura de sensores de presión analógicos y el filtrado de datos.
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+> 🔗 **Dependencia del Sistema:** Este nodo actúa como esclavo y envía datos únicamente cuando el **Nodo Maestro** lo solicita. Para que el sistema funcione, debe estar conectado físicamente a él.
+> 👉 **[Repositorio del Nodo Maestro (Heltec V3)](https://github.com/ualamc158/heltecV3LoRaWanSensorAnalogico)**
 
-This is the simplest buildable example. The example is used by command `idf.py create-project`
-that copies the project to user specified path and set it's name. For more information follow the [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project)
+---
 
+## 🚀 1. ¿Qué hace este código?
+Para garantizar lecturas estables y sin colisiones en la radio, el ESP32-S3 realiza tres tareas:
 
+1. **Autocalibración (Tara):** Al arrancar, toma 40 muestras rápidas para establecer el "Voltaje Cero" (Offset dinámico). **Importante: No aplicar presión al encender la placa.**
+2. **Filtrado:** Implementa un filtro pasa-bajos exponencial continuo (cada 100ms) para estabilizar la lectura y eliminar el ruido eléctrico.
+3. **Comunicación Sincronizada:** Escucha por su puerto UART. Solo cuando recibe el comando `'G'` desde el Maestro, empaqueta el último valor filtrado y se lo envía.
 
-## How to use example
-We encourage the users to use the example as a template for the new projects.
-A recommended way is to follow the instructions on a [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project).
+---
 
-## Example folder contents
+## 🔌 2. Conexiones Físicas (Cables)
 
-The project **sample_project** contains one source file in C language [main.c](main/main.c). The file is located in folder [main](main).
+Utiliza los pines impresos en la placa para conectar el ESP32-S3 con el Heltec:
 
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt`
-files that provide set of directives and instructions describing the project's source files and targets
-(executable, library, or both). 
+| Pin ESP32-S3 (Esclavo) | Pin Heltec (Maestro) | Función del Cable |
+| :--- | :--- | :--- |
+| **GND** | **GND** | **Masa Común:** ¡Obligatorio para compartir referencia eléctrica! |
+| **18** (RX) | **33** (TX) | **Recibe Comando:** Escucha la orden `'G'` del Maestro. |
+| **17** (TX) | **35** (RX) | **Envía Datos:** Transmite la lectura de presión (`P:XX.XX\n`). |
 
-Below is short explanation of remaining files in the project folder.
+### Conexión del Sensor
+- **VCC:** 3V3 o 5V (según tu sensor).
+- **GND:** GND.
+- **Señal (Out):** Conectado al **GPIO 4** (Configurado como ADC1_CH3).
 
-```
-├── CMakeLists.txt
-├── main
-│   ├── CMakeLists.txt
-│   └── main.c
-└── README.md                  This is the file you are currently reading
-```
-Additionally, the sample project contains Makefile and component.mk files, used for the legacy Make based build system. 
-They are not used or needed when building with CMake and idf.py.
+---
+
+## ⚙️ 3. Compilación y Ejecución
+Este proyecto utiliza **ESP-IDF**.
+1. Configura el target: `idf.py set-target esp32s3`
+2. Construye y sube: `idf.py build flash monitor`
