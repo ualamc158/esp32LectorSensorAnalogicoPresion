@@ -6,11 +6,11 @@
 #include "esp_adc/adc_oneshot.h"
 #include "driver/uart.h"
 
-static const char *TAG = "DEBUG_ESCLAVO";
+static const char *TAG = "CEREBRO_SENSOR";
 
 #define UART_NUM         UART_NUM_1
-#define TXD_PIN          17 // Al pin 35 del Heltec
-#define RXD_PIN          18 // Al pin 33 del Heltec
+#define TXD_PIN          17 // Al RX del Heltec (Pin 35)
+#define RXD_PIN          18 // Al TX del Heltec (Pin 33)
 #define UART_BAUD_RATE   115200
 
 float voltaje_zero_dinamico = 0.502;
@@ -38,7 +38,7 @@ void app_main(void) {
     adc_oneshot_chan_cfg_t config = { .bitwidth = ADC_BITWIDTH_DEFAULT, .atten = ADC_ATTEN_DB_12 };
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL_3, &config));
 
-    // Calibración inicial
+    // Calibración inicial (Tara)
     ESP_LOGI(TAG, "Calibrando...");
     float suma = 0;
     for(int i=0; i<40; i++) {
@@ -52,11 +52,10 @@ void app_main(void) {
     float presion_filtrada = 0;
     float alfa = 0.15;
     bool primera = true;
-
-    ESP_LOGI(TAG, "Esperando orden 'G' desde el Heltec (GPIO 18)...");
+    int contador_muestras = 0;
 
     while (1) {
-        // LEER Y FILTRAR SIEMPRE (Para que el dato esté fresco)
+        // LEER Y FILTRAR SIEMPRE
         int raw;
         adc_oneshot_read(adc1_handle, ADC_CHANNEL_3, &raw);
         float v = ((raw / 4095.0) * 3.3) * 1.5;
@@ -65,29 +64,22 @@ void app_main(void) {
         if (primera) { presion_filtrada = p_inst; primera = false; }
         else { presion_filtrada = (alfa * p_inst) + ((1.0 - alfa) * presion_filtrada); }
 
-        // REVISAR UART
-        uint8_t cmd;
-        int n = uart_read_bytes(UART_NUM, &cmd, 1, pdMS_TO_TICKS(5));
-        
-        if (n > 0) {
-            if (cmd == 'G') {
-                // --- VISUALIZACIÓN DEL EVENTO ---
-                ESP_LOGW(TAG, "¡ORDEN RECIBIDA! -> [G]");
-                
-                char p[64];
-                int len = snprintf(p, sizeof(p), "P:%.2f\n", presion_filtrada);
-                
-                ESP_LOGI(TAG, "Dato leido del sensor: %.2f mB", presion_filtrada);
-                
-                // Mando por el cable
-                uart_write_bytes(UART_NUM, p, len);
-                
-                ESP_LOGE(TAG, "Enviado por UART (GPIO 17): %s", p);
-                ESP_LOGI(TAG, "------------------------------------------");
-            } else {
-                ESP_LOGD(TAG, "Recibido caracter inesperado: %c", cmd);
-            }
+        // Mostrar cada muestra por terminal (Dato fresco)
+        ESP_LOGI(TAG, "Presion Actual (Filtrada): %.2f mB", presion_filtrada);
+
+        // Cada 30 segundos (con vTaskDelay 100ms, son 300 iteraciones)
+        contador_muestras++;
+        if (contador_muestras >= 300) {
+            char p_msg[64];
+            int len = snprintf(p_msg, sizeof(p_msg), "P:%.2f\n", presion_filtrada);
+            
+            // Enviar proactivamente por el cable
+            uart_write_bytes(UART_NUM, p_msg, len);
+            ESP_LOGW(TAG, ">>> MEDIA DE 30s ENVIADA AL HELTEC: %s", p_msg);
+            
+            contador_muestras = 0;
         }
-        vTaskDelay(pdMS_TO_TICKS(50));
+
+        vTaskDelay(pdMS_TO_TICKS(100)); // Muestreo a 10Hz
     }
 }

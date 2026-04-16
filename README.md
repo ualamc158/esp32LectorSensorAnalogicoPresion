@@ -1,39 +1,37 @@
-# Lector de Sensor de Presión (ESP32-S3 Esclavo)
+# Nodo Sensor de Presión - ESP32-S3 (v2)
 
-Este repositorio contiene el código para un **ESP32-S3** encargado de la lectura de sensores de presión analógicos y el filtrado de datos.
+Este repositorio contiene el firmware para un **ESP32-S3** encargado de la adquisición, filtrado y envío proactivo de datos de presión. En esta versión (rama `v2_sensor-node`), el dispositivo no espera órdenes, sino que calcula y transmite la información automáticamente.
 
-> 🔗 **Dependencia del Sistema:** Este nodo actúa como esclavo y envía datos únicamente cuando el **Nodo Maestro** lo solicita. Para que el sistema funcione, debe estar conectado físicamente a él.
-> 👉 **[Repositorio del Nodo Maestro (Heltec V3)](https://github.com/ualamc158/heltecV3LoRaWanSensorAnalogico)**
+> [!IMPORTANT]
+> **Dependencia de Red:** Para que los datos lleguen a la nube, este nodo debe estar conectado al **[Heltec V3 Bridge (LoRaWAN)](https://github.com/ualamc158/heltecV3LoRaWanSensorAnalogico)**, que actúa como pasarela hacia la red LoRaWAN.
 
----
+## 🚀 Características de la Versión 2
+* **Lectura Analógica:** Captura de datos mediante el ADC1 (Canal 3).
+* **Calibración Dinámica (Tara):** Al arrancar, el sensor realiza un muestreo de 40 puntos para establecer el voltaje de residuo (zero offset).
+* **Filtrado EMA:** Implementa un Filtro de Media Móvil Exponencial ($\alpha = 0.15$) para eliminar el ruido eléctrico del sensor de presión.
+* **Envío Proactivo:** Transmisión automática de datos por UART cada 30 segundos (`P:XX.XX\n`).
 
-## 🚀 1. ¿Qué hace este código?
-Para garantizar lecturas estables y sin colisiones en la radio, el ESP32-S3 realiza tres tareas:
+## 🔌 Conexiones (Pinout)
 
-1. **Autocalibración (Tara):** Al arrancar, toma 40 muestras rápidas para establecer el "Voltaje Cero" (Offset dinámico). **Importante: No aplicar presión al encender la placa.**
-2. **Filtrado:** Implementa un filtro pasa-bajos exponencial continuo (cada 100ms) para estabilizar la lectura y eliminar el ruido eléctrico.
-3. **Comunicación Sincronizada:** Escucha por su puerto UART. Solo cuando recibe el comando `'G'` desde el Maestro, empaqueta el último valor filtrado y se lo envía.
-
----
-
-## 🔌 2. Conexiones Físicas (Cables)
-
-Utiliza los pines impresos en la placa para conectar el ESP32-S3 con el Heltec:
-
-| Pin ESP32-S3 (Esclavo) | Pin Heltec (Maestro) | Función del Cable |
+| ESP32-S3 (Nodo Sensor) | Heltec V3 (Bridge LoRa) | Función |
 | :--- | :--- | :--- |
-| **GND** | **GND** | **Masa Común:** ¡Obligatorio para compartir referencia eléctrica! |
-| **18** (RX) | **33** (TX) | **Recibe Comando:** Escucha la orden `'G'` del Maestro. |
-| **17** (TX) | **35** (RX) | **Envía Datos:** Transmite la lectura de presión (`P:XX.XX\n`). |
+| **GND** | **GND** | Masa de referencia (Obligatorio) |
+| **GPIO 17** (TX) | **GPIO 35** (RX) | **Salida de Datos:** Envío de presión |
+| **GPIO 18** (RX) | **GPIO 33** (TX) | Canal de control (Reservado) |
 
-### Conexión del Sensor
-- **VCC:** 3V3 o 5V (según tu sensor).
-- **GND:** GND.
-- **Señal (Out):** Conectado al **GPIO 4** (Configurado como ADC1_CH3).
+* **Sensor de Presión:** Conectado al pin analógico correspondiente al ADC1_CHANNEL_3 (GPIO 4 en la mayoría de esquemas de S3).
 
----
+## 📊 Lógica de Software
 
-## ⚙️ 3. Compilación y Ejecución
-Este proyecto utiliza **ESP-IDF**.
-1. Configura el target: `idf.py set-target esp32s3`
-2. Construye y sube: `idf.py build flash monitor`
+El código opera en un bucle de 10Hz (100ms):
+1.  **Muestreo:** Lee el ADC y convierte a milibares (mB) aplicando la calibración inicial.
+2.  **Filtrado:** Suaviza la lectura para evitar picos falsos.
+3.  **Contador:** Al alcanzar las 300 muestras (30 segundos), empaqueta el valor y lo envía por el puerto UART_1.
+
+## 🏗️ Compilación
+
+Diseñado para **ESP-IDF v5.x**.
+
+```bash
+idf.py set-target esp32s3
+idf.py build flash monitor
